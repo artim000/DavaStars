@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Stars Shop - Mini App</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        .vip-card {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+        }
+        .gem-shine {
+            animation: shine 2s infinite;
+        }
+        @keyframes shine {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+        .button-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .button-primary:active {
+            transform: scale(0.95);
+        }
+        .tab-active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .copy-success {
+            animation: copyPulse 0.3s ease;
+        }
+        @keyframes copyPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+        const tg = window.Telegram.WebApp;
+
+        // Конфігурація
+        const MONO_CARD = '4441114431383684';
+        const GEM_PRICE = 20; // 1 гем = 20 грн
+        
+        function App() {
+            const [activeTab, setActiveTab] = useState('shop');
+            const [userData, setUserData] = useState({
+                id: tg.initDataUnsafe?.user?.id || 123456789,
+                username: tg.initDataUnsafe?.user?.username || 'user',
+                firstName: tg.initDataUnsafe?.user?.first_name || 'Користувач',
+                isVip: false,
+                gems: 0,
+                balance: 0
+            });
+            const [copiedCard, setCopiedCard] = useState(false);
+
+            useEffect(() => {
+                tg.ready();
+                tg.expand();
+                tg.enableClosingConfirmation();
+                
+                // Завантажуємо дані користувача з localStorage
+                const savedData = localStorage.getItem('userData');
+                if (savedData) {
+                    setUserData({...userData, ...JSON.parse(savedData)});
+                }
+            }, []);
+
+            const saveUserData = (data) => {
+                localStorage.setItem('userData', JSON.stringify(data));
+                setUserData(data);
+            };
+
+            const copyCard = () => {
+                navigator.clipboard.writeText(MONO_CARD);
+                setCopiedCard(true);
+                tg.HapticFeedback.notificationOccurred('success');
+                setTimeout(() => setCopiedCard(false), 2000);
+            };
+
+            const buyStars = (amount, price) => {
+                tg.showConfirm(`Купити ${amount} зірок за ${price} грн?`, (confirmed) => {
+                    if (confirmed) {
+                        tg.showPopup({
+                            title: '💳 Оплата',
+                            message: `Переведіть ${price} грн на карту:\n${MONO_CARD}\n\nПісля оплати натисніть "Я оплатив"`,
+                            buttons: [
+                                {id: 'copy', type: 'default', text: 'Копіювати карту'},
+                                {id: 'paid', type: 'ok', text: 'Я оплатив'},
+                                {type: 'cancel'}
+                            ]
+                        }, (buttonId) => {
+                            if (buttonId === 'copy') {
+                                copyCard();
+                            } else if (buttonId === 'paid') {
+                                tg.sendData(JSON.stringify({
+                                    action: 'buy_stars',
+                                    amount: amount,
+                                    price: price,
+                                    user_id: userData.id
+                                }));
+                                tg.showAlert('✅ Запит відправлено! Очікуйте підтвердження.');
+                            }
+                        });
+                    }
+                });
+            };
+
+            const buyGems = (gems, price) => {
+                tg.showConfirm(`Купити ${gems} 💎 гемів за ${price} грн?`, (confirmed) => {
+                    if (confirmed) {
+                        tg.showPopup({
+                            title: '💳 Оплата',
+                            message: `Переведіть ${price} грн на карту:\n${MONO_CARD}`,
+                            buttons: [
+                                {id: 'copy', type: 'default', text: 'Копіювати карту'},
+                                {id: 'paid', type: 'ok', text: 'Я оплатив'},
+                                {type: 'cancel'}
+                            ]
+                        }, (buttonId) => {
+                            if (buttonId === 'copy') {
+                                copyCard();
+                            } else if (buttonId === 'paid') {
+                                tg.sendData(JSON.stringify({
+                                    action: 'buy_gems',
+                                    gems: gems,
+                                    price: price,
+                                    user_id: userData.id
+                                }));
+                                tg.showAlert('✅ Запит відправлено!');
+                            }
+                        });
+                    }
+                });
+            };
+
+            const openCase = (caseType, price, gemPrice) => {
+                const message = gemPrice 
+                    ? `Відкрити кейс за ${gemPrice} 💎 гемів або ${price} зірок?`
+                    : `Відкрити кейс за ${price} зірок?`;
+                    
+                tg.showConfirm(message, (confirmed) => {
+                    if (confirmed) {
+                        if (gemPrice && userData.gems >= gemPrice) {
+                            // Оплата гемами
+                            saveUserData({...userData, gems: userData.gems - gemPrice});
+                            tg.sendData(JSON.stringify({
+                                action: 'open_case',
+                                case_type: caseType,
+                                payment: 'gems',
+                                user_id: userData.id
+                            }));
+                        } else {
+                            // Оплата зірками
+                            tg.sendData(JSON.stringify({
+                                action: 'open_case',
+                                case_type: caseType,
+                                payment: 'stars',
+                                user_id: userData.id
+                            }));
+                        }
+                    }
+                });
+            };
+
+            const buyVip = () => {
+                tg.showConfirm('Купити VIP статус за 100 грн?', (confirmed) => {
+                    if (confirmed) {
+                        tg.showPopup({
+                            title: '💳 Оплата VIP',
+                            message: `Переведіть 100 грн на карту:\n${MONO_CARD}`,
+                            buttons: [
+                                {id: 'copy', type: 'default', text: 'Копіювати карту'},
+                                {id: 'paid', type: 'ok', text: 'Я оплатив'},
+                                {type: 'cancel'}
+                            ]
+                        }, (buttonId) => {
+                            if (buttonId === 'copy') {
+                                copyCard();
+                            } else if (buttonId === 'paid') {
+                                tg.sendData(JSON.stringify({
+                                    action: 'buy_vip',
+                                    user_id: userData.id
+                                }));
+                                tg.showAlert('✅ Запит на VIP відправлено!');
+                            }
+                        });
+                    }
+                });
+            };
+
+            return (
+                <div className="min-h-screen pb-20">
+                    {/* Header */}
+                    <div className="card m-4 p-6">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <h1 className="text-2xl font-bold text-gray-800">
+                                    👋 Привіт, {userData.firstName}!
+                                </h1>
+                                <p className="text-gray-600">@{userData.username}</p>
+                            </div>
+                            {userData.isVip && (
+                                <div className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 py-2 rounded-full font-bold">
+                                    👑 VIP
+                                </div>
+                            )}
+                        </div>
+                        
+                        <div className="mt-4 grid grid-cols-2 gap-4">
+                            <div className="bg-blue-50 p-4 rounded-xl">
+                                <div className="text-gray-600 text-sm">Геми</div>
+                                <div className="text-2xl font-bold text-blue-600 gem-shine">
+                                    💎 {userData.gems}
+                                </div>
+                            </div>
+                            <div className="bg-yellow-50 p-4 rounded-xl">
+                                <div className="text-gray-600 text-sm">Зірки</div>
+                                <div className="text-2xl font-bold text-yellow-600">
+                                    ⭐ {userData.balance}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Копіювання карти */}
+                        <button
+                            onClick={copyCard}
+                            className={`w-full mt-4 p-3 rounded-xl font-semibold transition-all ${
+                                copiedCard 
+                                    ? 'bg-green-500 text-white copy-success' 
+                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            }`}
+                        >
+                            {copiedCard ? '✅ Скопійовано!' : '💳 Копіювати карту Monobank'}
+                        </button>
+                        {!copiedCard && (
+                            <p className="text-center text-sm text-gray-500 mt-2">
+                                {MONO_CARD}
+                            </p>
+                        )}
+                    </div>
+
+                    {/* Tabs */}
+                    <div className="flex gap-2 px-4 mb-4 overflow-x-auto">
+                        {[
+                            {id: 'shop', icon: '🛒', label: 'Магазин'},
+                            {id: 'cases', icon: '🎁', label: 'Кейси'},
+                            {id: 'gems', icon: '💎', label: 'Геми'},
+                            {id: 'vip', icon: '👑', label: 'VIP'},
+                            {id: 'accounts', icon: '🎮', label: 'Акаунти'},
+                            {id: 'profile', icon: '👤', label: 'Профіль'}
+                        ].map(tab => (
+                            <button
+                                key={tab.id}
+                                onClick={() => setActiveTab(tab.id)}
+                                className={`px-4 py-2 rounded-xl whitespace-nowrap font-semibold transition-all ${
+                                    activeTab === tab.id ? 'tab-active' : 'bg-white text-gray-700'
+                                }`}
+                            >
+                                {tab.icon} {tab.label}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Content */}
+                    <div className="px-4">
+                        {/* Магазин Зірок */}
+                        {activeTab === 'shop' && (
+                            <div className="space-y-4">
+                                <h2 className="text-xl font-bold text-white mb-4">⭐ Купити Зірки</h2>
+                                {[
+                                    {stars: 15, price: 23},
+                                    {stars: 25, price: 45},
+                                    {stars: 50, price: 58},
+                                    {stars: 100, price: 90},
+                                    {stars: 200, price: 175},
+                                    {stars: 500, price: 410},
+                                    {stars: 1000, price: 760},
+                                    {stars: 2000, price: 1650}
+                                ].map(item => (
+                                    <div key={item.stars} className="card p-4">
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <div className="text-2xl font-bold">⭐ {item.stars} зірок</div>
+                                                <div className="text-gray-600">{item.price} грн</div>
+                                            </div>
+                                            <button
+                                                onClick={() => buyStars(item.stars, item.price)}
+                                                className="button-primary"
+                                            >
+                                                Купити 💳
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* Кейси */}
+                        {activeTab === 'cases' && (
+                            <div className="space-y-4">
+                                <h2 className="text-xl font-bold text-white mb-4">🎁 Кейси</h2>
+                                
+                                {/* Бронзовий кейс - можна за геми */}
+                                <div className="card p-4">
+                                    <div className="flex items-center gap-4">
+                                        <div className="text-6xl">🥉</div>
+                                        <div className="flex-1">
+                                            <h3 className="text-xl font-bold">Бронзовий Кейс</h3>
+                                            <p className="text-gray-600">Приз: 5-100 зірок</p>
+                                            <div className="flex gap-2 mt-2">
+                                                <span className="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-sm font-semibold">
+                                                    💎 1 гем
+                                                </span>
+                                                <span className="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full text-sm font-semibold">
+                                                    ⭐ 15 зірок
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={() => openCase('bronze', 15, 1)}
+                                            className="button-primary"
+                                        >
+                                            Відкрити
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Інші кейси */}
+                                {[
+                                    {emoji: '🥈', name: 'Срібний Кейс', prize: '10-300', stars: 25},
+                                    {emoji: '🥇', name: 'Золотий Кейс', prize: '25-750', stars: 50},
+                                    {emoji: '💎', name: 'Діамантовий Кейс', prize: '50-2000', stars: 100}
+                                ].map(item => (
+                                    <div key={item.name} className="card p-4">
+                                        <div className="flex items-center gap-4">
+                                            <div className="text-6xl">{item.emoji}</div>
+                                            <div className="flex-1">
+                                                <h3 className="text-xl font-bold">{item.name}</h3>
+                                                <p className="text-gray-600">Приз: {item.prize} зірок</p>
+                                                <span className="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full text-sm font-semibold">
+                                                    ⭐ {item.stars} зірок
+                                                </span>
+                                            </div>
+                                            <button
+                                                onClick={() => openCase(item.name.toLowerCase(), item.stars)}
+                                                className="button-primary"
+                                            >
+                                                Відкрити
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* Геми */}
+                        {activeTab === 'gems' && (
+                            <div className="space-y-4">
+                                <h2 className="text-xl font-bold text-white mb-4">💎 Купити Геми</h2>
+                                <div className="card p-6 text-center">
+                                    <div className="text-6xl mb-4 gem-shine">💎</div>
+                                    <h3 className="text-2xl font-bold mb-2">Що таке Геми?</h3>
+                                    <p className="text-gray-600 mb-6">
+                                        Геми - це спеціальна валюта для відкриття бронзових кейсів!
+                                        <br/>1 гем = 20 грн
+                                    </p>
+                                </div>
+
+                                {[
+                                    {gems: 1, price: 20},
+                                    {gems: 3, price: 55, discount: '8%'},
+                                    {gems: 5, price: 90, discount: '10%'},
+                                    {gems: 10, price: 170, discount: '15%'}
+                                ].map(item => (
+                                    <div key={item.gems} className="card p-4">
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <div className="text-2xl font-bold gem-shine">💎 {item.gems} {item.gems === 1 ? 'гем' : 'гемів'}</div>
+                                                <div className="text-gray-600">
+                                                    {item.price} грн
+                                                    {item.discount && (
+                                                        <span className="ml-2 bg-green-100 text-green-700 px-2 py-1 rounded text-sm font-semibold">
+                                                            -{item.discount}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <button
+                                                onClick={() => buyGems(item.gems, item.price)}
+                                                className="button-primary"
+                                            >
+                                                Купити 💳
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* VIP */}
+                        {activeTab === 'vip' && (
+                            <div className="space-y-4">
+                                <h2 className="text-xl font-bold text-white mb-4">👑 VIP Привілеї</h2>
+                                
+                                {!userData.isVip && (
+                                    <div className="vip-card p-6 text-center">
+                                        <div className="text-6xl mb-4">👑</div>
+                                        <h3 className="text-2xl font-bold mb-4">Стань VIP!</h3>
+                                        <p className="mb-6">Отримай ексклюзивні можливості</p>
+                                        <button
+                                            onClick={buyVip}
+                                            className="bg-white text-purple-600 px-8 py-3 rounded-xl font-bold text-lg"
+                                        >
+                                            Купити VIP - 100 грн 💳
+                                        </button>
+                                    </div>
+                                )}
+
+                                <div className="card p-6">
+                                    <h3 className="text-xl font-bold mb-4">🎁 VIP Переваги:</h3>
+                                    <div className="space-y-3">
+                                        {[
+                                            {icon: '⭐', text: 'Знижка 30% на всі зірки'},
+                                            {icon: '🎁', text: 'Ексклюзивні VIP кейси'},
+                                            {icon: '💎', text: 'Бонус: 5 гемів щомісяця'},
+                                            {icon: '🎮', text: 'Приоритет при купівлі акаунтів'},
+                                            {icon: '👑', text: 'VIP значок в профілі'},
+                                            {icon: '🔥', text: 'Доступ до VIP чату'},
+                                            {icon: '📊', text: 'Розширена статистика'},
+                                            {icon: '🎯', text: 'Підвищені шанси в кейсах'}
+                                        ].map((perk, index) => (
+                                            <div key={index} className="flex items-center gap-3 bg-purple-50 p-3 rounded-lg">
+                                                <span className="text-2xl">{perk.icon}</span>
+                                                <span className="font-semibold text-gray-700">{perk.text}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {userData.isVip && (
+                                    <>
+                                        <div className="card p-6">
+                                            <h3 className="text-xl font-bold mb-4">🎁 VIP Кейси</h3>
+                                            {[
+                                                {name: 'VIP Platinum', prize: '100-500', price: 50},
+                                                {name: 'VIP Diamond', prize: '500-2000', price: 100},
+                                                {name: 'VIP Mega', prize: '2000-10000', price: 200}
+                                            ].map(item => (
+                                                <div key={item.name} className="bg-purple-50 p-4 rounded-lg mb-3">
+                                                    <div className="flex items-center justify-between">
+                                                        <div>
+                                                            <div className="font-bold">{item.name}</div>
+                                                            <div className="text-sm text-gray-600">Приз: {item.prize} зірок</div>
+                                                        </div>
+                                                        <button
+                                                            onClick={() => openCase(item.name, item.price)}
+                                                            className="button-primary"
+                                                        >
+                                                            {item.price} ⭐
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Акаунти */}
+                        {activeTab === 'accounts' && (
+                            <div className="space-y-4">
+                                <h2 className="text-xl font-bold text-white mb-4">🎮 Ігрові Акаунти</h2>
+                                
+                                {userData.isVip && (
+                                    <div className="vip-card p-4 mb-4">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-2xl">👑</span>
+                                            <span className="font-bold">VIP Привілей: Приоритет при купівлі!</span>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {[
+                                    {game: 'Brawl Stars', level: 45, price: 150, vip: true},
+                                    {game: 'Clash Royale', level: 50, price: 200},
+                                    {game: 'Clash of Clans', level: 120, price: 300, vip: true},
+                                    {game: 'Standoff 2', level: 85, price: 100}
+                                ].map(item => (
+                                    <div key={item.game} className={`card p-4 ${item.vip && !userData.isVip ? 'opacity-50' : ''}`}>
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="text-xl font-bold">{item.game}</div>
+                                                    {item.vip && (
+                                                        <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded text-xs font-bold">
+                                                            👑 VIP
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className="text-gray-600">Рівень: {item.level}</div>
+                                                <div className="text-lg font-bold text-green-600">{item.price} грн</div>
+                                            </div>
+                                            <button
+                                                onClick={() => {
+                                                    if (item.vip && !userData.isVip) {
+                                                        tg.showAlert('❌ Цей акаунт доступний тільки для VIP!');
+                                                        return;
+                                                    }
+                                                    tg.showPopup({
+                                                        title: '💳 Оплата акаунту',
+                                                        message: `Переведіть ${item.price} грн на карту:\n${MONO_CARD}`,
+                                                        buttons: [
+                                                            {id: 'copy', type: 'default', text: 'Копіювати'},
+                                                            {id: 'paid', type: 'ok', text: 'Я оплатив'},
+                                                            {type: 'cancel'}
+                                                        ]
+                                                    }, (buttonId) => {
+                                                        if (buttonId === 'copy') copyCard();
+                                                        else if (buttonId === 'paid') {
+                                                            tg.sendData(JSON.stringify({
+                                                                action: 'buy_account',
+                                                                game: item.game,
+                                                                price: item.price,
+                                                                user_id: userData.id
+                                                            }));
+                                                        }
+                                                    });
+                                                }}
+                                                className={`button-primary ${item.vip && !userData.isVip ? 'opacity-50' : ''}`}
+                                                disabled={item.vip && !userData.isVip}
+                                            >
+                                                Купити 💳
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* Профіль */}
+                        {activeTab === 'profile' && (
+                            <div className="space-y-4">
+                                <h2 className="text-xl font-bold text-white mb-4">👤 Мій Профіль</h2>
+                                
+                                <div className="card p-6">
+                                    <div className="text-center mb-6">
+                                        <div className="text-6xl mb-2">👤</div>
+                                        <h3 className="text-2xl font-bold">{userData.firstName}</h3>
+                                        <p className="text-gray-600">@{userData.username}</p>
+                                        <p className="text-sm text-gray-500">ID: {userData.id}</p>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4 mb-6">
+                                        <div className="bg-purple-50 p-4 rounded-xl text-center">
+                                            <div className="text-3xl font-bold text-purple-600 gem-shine">
+                                                💎 {userData.gems}
+                                            </div>
+                                            <div className="text-sm text-gray-600">Гемів</div>
+                                        </div>
+                                        <div className="bg-yellow-50 p-4 rounded-xl text-center">
+                                            <div className="text-3xl font-bold text-yellow-600">
+                                                ⭐ {userData.balance}
+                                            </div>
+                                            <div className="text-sm text-gray-600">Зірок</div>
+                                        </div>
+                                    </div>
+
+                                    {userData.isVip && (
+                                        <div className="vip-card p-4 rounded-xl text-center mb-4">
+                                            <div className="text-4xl mb-2">👑</div>
+                                            <div className="font-bold text-lg">VIP СТАТУС АКТИВНИЙ</div>
+                                        </div>
+                                    )}
+
+                                    <div className="space-y-3">
+                                        <div className="flex items-center justify-between bg-gray-50 p-3 rounded-lg">
+                                            <span className="text-gray-700">📊 Покупок</span>
+                                            <span className="font-bold">0</span>
+                                        </div>
+                                        <div className="flex items-center justify-between bg-gray-50 p-3 rounded-lg">
+                                            <span className="text-gray-700">🎁 Кейсів відкрито</span>
+                                            <span className="font-bold">0</span>
+                                        </div>
+                                        <div className="flex items-center justify-between bg-gray-50 p-3 rounded-lg">
+                                            <span className="text-gray-700">👥 Рефералів</span>
+                                            <span className="font-bold">0</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <button
+                                    onClick={() => {
+                                        tg.showConfirm('Очистити всі дані?', (confirmed) => {
+                                            if (confirmed) {
+                                                localStorage.clear();
+                                                saveUserData({
+                                                    ...userData,
+                                                    isVip: false,
+                                                    gems: 0,
+                                                    balance: 0
+                                                });
+                                                tg.showAlert('✅ Дані очищено!');
+                                            }
+                                        });
+                                    }}
+                                    className="w-full bg-red-500 text-white p-4 rounded-xl font-bold"
+                                >
+                                    🗑️ Очистити дані
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>
